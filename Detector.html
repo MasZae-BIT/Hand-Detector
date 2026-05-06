@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hand Detector</title>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.11.0/dist/tf-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.11.0/dist/tf-backend-webgl.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/hand-pose-detection@2.0.1/dist/hand-pose-detection.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #080c10;
+    --panel: #0d1117;
+    --border: #1e2d3d;
+    --accent: #00e5ff;
+    --accent2: #7c3aed;
+    --warn: #ff6b35;
+    --text: #e2e8f0;
+    --muted: #4a5568;
+    --success: #00d084;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0;
+    overflow-x: hidden;
+  }
+
+  header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .logo-icon svg { width: 20px; height: 20px; }
+
+  h1 {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    color: #fff;
+  }
+
+  .badge {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 99px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+
+  .main {
+    width: 100%;
+    max-width: 1100px;
+    padding: 28px 24px;
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 20px;
+    align-items: start;
+  }
+
+  .camera-wrap {
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: #000;
+    aspect-ratio: 4/3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    display: block;
+  }
+
+  #canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .status-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    padding: 10px 16px;
+    background: linear-gradient(transparent, rgba(8,12,16,0.92));
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+  }
+  .dot.live { background: var(--success); box-shadow: 0 0 6px var(--success); animation: pulse 1.5s infinite; }
+  .dot.loading { background: var(--warn); animation: pulse 0.8s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; } 50% { opacity: 0.3; }
+  }
+
+  #status-text { color: var(--muted); }
+
+  .placeholder {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  .placeholder svg { opacity: 0.3; }
+
+  .placeholder p { font-size: 14px; max-width: 200px; line-height: 1.6; }
+
+  .btn-start {
+    margin-top: 4px;
+    padding: 10px 24px;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.03em;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+
+  .btn-start:hover { opacity: 0.85; }
+  .btn-start:active { transform: scale(0.97); }
+
+  .sidebar { display: flex; flex-direction: column; gap: 14px; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+  }
+
+  .panel-title {
+    font-size: 10px;
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .count-display {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  #hand-count {
+    font-size: 72px;
+    font-weight: 800;
+    color: var(--accent);
+    line-height: 1;
+    transition: color 0.3s;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #hand-count.two { color: var(--success); }
+
+  .count-label {
+    font-size: 13px;
+    color: var(--muted);
+    padding-bottom: 6px;
+  }
+
+  .hand-list {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .hand-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(0,229,255,0.05);
+    border: 1px solid rgba(0,229,255,0.15);
+    font-size: 13px;
+    animation: fadeIn 0.2s ease;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+  .hand-name {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+  }
+
+  .hand-conf {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .conf-bar {
+    height: 3px;
+    border-radius: 99px;
+    background: var(--border);
+    margin-top: 8px;
+    overflow: hidden;
+  }
+
+  .conf-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: var(--accent);
+    transition: width 0.15s ease;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+
+  .stat-row:last-child { border-bottom: none; }
+  .stat-key { color: var(--muted); }
+  .stat-val {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+  }
+  .stat-val.green { color: var(--success); }
+
+  .settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+
+  .settings-row:last-child { border-bottom: none; }
+
+  .toggle {
+    position: relative;
+    width: 36px; height: 20px;
+    cursor: pointer;
+  }
+
+  .toggle input { opacity: 0; width: 0; height: 0; }
+
+  .slider-knob {
+    position: absolute;
+    inset: 0;
+    background: var(--border);
+    border-radius: 99px;
+    transition: 0.2s;
+  }
+
+  .slider-knob::before {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    left: 3px; top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: 0.2s;
+  }
+
+  input:checked + .slider-knob { background: var(--accent); }
+  input:checked + .slider-knob::before { transform: translateX(16px); }
+
+  footer {
+    width: 100%;
+    max-width: 1100px;
+    padding: 0 24px 28px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    gap: 16px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round">
+        <path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/>
+        <path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2"/>
+        <path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8"/>
+        <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
+      </svg>
+    </div>
+    <h1>HAND DETECTOR</h1>
+  </div>
+  <span class="badge">MEDIAPIPE · TFJS</span>
+</header>
+
+<div class="main">
+  <div class="camera-wrap">
+    <div class="placeholder" id="placeholder">
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+      </svg>
+      <p>Kamera belum aktif. Klik tombol untuk mulai deteksi.</p>
+      <button class="btn-start" id="btn-start" onclick="startCamera()">▶ Aktifkan Kamera</button>
+    </div>
+    <video id="video" playsinline muted style="display:none"></video>
+    <canvas id="canvas"></canvas>
+    <div class="status-bar">
+      <div class="dot" id="status-dot"></div>
+      <span id="status-text">Menunggu...</span>
+    </div>
+  </div>
+
+  <div class="sidebar">
+
+    <div class="panel">
+      <div class="panel-title">// Jumlah Tangan</div>
+      <div class="count-display">
+        <span id="hand-count">0</span>
+        <span class="count-label">tangan<br>terdeteksi</span>
+      </div>
+      <div class="hand-list" id="hand-list"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">// Stats</div>
+      <div class="stat-row">
+        <span class="stat-key">FPS</span>
+        <span class="stat-val green" id="fps-val">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-key">Frame</span>
+        <span class="stat-val" id="frame-val">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-key">Model</span>
+        <span class="stat-val" id="model-stat">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-key">Backend</span>
+        <span class="stat-val" id="backend-val">—</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">// Pengaturan</div>
+      <div class="settings-row">
+        <span style="color:var(--muted);font-size:13px">Tampilkan keypoint</span>
+        <label class="toggle"><input type="checkbox" id="show-keypoints" checked><span class="slider-knob"></span></label>
+      </div>
+      <div class="settings-row">
+        <span style="color:var(--muted);font-size:13px">Tampilkan landmark</span>
+        <label class="toggle"><input type="checkbox" id="show-skeleton" checked><span class="slider-knob"></span></label>
+      </div>
+      <div class="settings-row">
+        <span style="color:var(--muted);font-size:13px">Label tangan</span>
+        <label class="toggle"><input type="checkbox" id="show-label" checked><span class="slider-knob"></span></label>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  <span>⌘ HAND DETECTOR v1.0</span>
+  <span>·</span>
+  <span>POWERED BY TENSORFLOW.JS + MEDIAPIPE</span>
+</footer>
+
+<script>
+let detector = null;
+let animId = null;
+let frameCount = 0;
+let lastFpsTime = performance.now();
+let fps = 0;
+let isRunning = false;
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+const HAND_CONNECTIONS = [
+  [0,1],[1,2],[2,3],[3,4],
+  [0,5],[5,6],[6,7],[7,8],
+  [5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],
+  [13,17],[17,18],[18,19],[19,20],
+  [0,17]
+];
+
+function setStatus(msg, state) {
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+  txt.textContent = msg;
+  dot.className = 'dot ' + (state || '');
+}
+
+async function startCamera() {
+  document.getElementById('placeholder').style.display = 'none';
+  video.style.display = 'block';
+  setStatus('Meminta izin kamera...', 'loading');
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false });
+    video.srcObject = stream;
+    await video.play();
+
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+
+    setStatus('Memuat model AI...', 'loading');
+    document.getElementById('model-stat').textContent = 'MediaPipe Lite';
+
+    const model = handPoseDetection.SupportedModels.MediaPipeHands;
+    const config = {
+      runtime: 'tfjs',
+      modelType: 'lite',
+      maxHands: 4,
+    };
+
+    detector = await handPoseDetection.createDetector(model, config);
+
+    const backend = tf.getBackend();
+    document.getElementById('backend-val').textContent = backend.toUpperCase();
+
+    setStatus('Live — Deteksi Aktif', 'live');
+    isRunning = true;
+    detect();
+  } catch (err) {
+    setStatus('Error: ' + err.message, '');
+    document.getElementById('placeholder').style.display = 'flex';
+    video.style.display = 'none';
+    console.error(err);
+  }
+}
+
+async function detect() {
+  if (!isRunning) return;
+
+  if (video.readyState >= 2 && detector) {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    let hands = [];
+    try {
+      hands = await detector.estimateHands(video, { flipHorizontal: true });
+    } catch(e) {}
+
+    const showKP = document.getElementById('show-keypoints').checked;
+    const showSkel = document.getElementById('show-skeleton').checked;
+    const showLabel = document.getElementById('show-label').checked;
+
+    for (const hand of hands) {
+      const kps = hand.keypoints;
+
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const kp of kps) {
+        if (kp.x < minX) minX = kp.x;
+        if (kp.y < minY) minY = kp.y;
+        if (kp.x > maxX) maxX = kp.x;
+        if (kp.y > maxY) maxY = kp.y;
+      }
+
+      const pad = 18;
+      minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+
+      const isLeft = hand.handedness === 'Left';
+      const boxColor = isLeft ? '#00e5ff' : '#7c3aed';
+      const altColor = isLeft ? 'rgba(0,229,255,0.15)' : 'rgba(124,58,237,0.15)';
+
+      ctx.strokeStyle = boxColor;
+      ctx.lineWidth = 2;
+      ctx.shadowColor = boxColor;
+      ctx.shadowBlur = 8;
+      roundRect(ctx, minX, minY, maxX - minX, maxY - minY, 10);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      const cornerLen = 14;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = boxColor;
+      drawCorners(ctx, minX, minY, maxX - minX, maxY - minY, cornerLen);
+
+      if (showLabel) {
+        const label = (isLeft ? '✦ KIRI' : '✦ KANAN');
+        const score = hand.score != null ? (hand.score * 100).toFixed(0) + '%' : '';
+        ctx.shadowColor = boxColor;
+        ctx.shadowBlur = 6;
+        ctx.fillStyle = boxColor;
+        ctx.font = 'bold 13px "Space Mono", monospace';
+        ctx.letterSpacing = '0.08em';
+        ctx.fillText(label + (score ? '  ' + score : ''), minX + 2, minY - 8);
+        ctx.shadowBlur = 0;
+      }
+
+      if (showSkel) {
+        ctx.strokeStyle = isLeft ? 'rgba(0,229,255,0.45)' : 'rgba(124,58,237,0.45)';
+        ctx.lineWidth = 1.5;
+        for (const [a, b] of HAND_CONNECTIONS) {
+          if (!kps[a] || !kps[b]) continue;
+          ctx.beginPath();
+          ctx.moveTo(kps[a].x, kps[a].y);
+          ctx.lineTo(kps[b].x, kps[b].y);
+          ctx.stroke();
+        }
+      }
+
+      if (showKP) {
+        for (const kp of kps) {
+          ctx.beginPath();
+          ctx.arc(kp.x, kp.y, 3.5, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff';
+          ctx.fill();
+          ctx.strokeStyle = boxColor;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+      }
+    }
+
+    updateSidebar(hands);
+
+    frameCount++;
+    const now = performance.now();
+    if (now - lastFpsTime >= 1000) {
+      fps = Math.round(frameCount * 1000 / (now - lastFpsTime));
+      frameCount = 0;
+      lastFpsTime = now;
+      document.getElementById('fps-val').textContent = fps + ' fps';
+    }
+    document.getElementById('frame-val').textContent = (parseInt(document.getElementById('frame-val').textContent || 0) + 1);
+  }
+
+  animId = requestAnimationFrame(detect);
+}
+
+function updateSidebar(hands) {
+  const countEl = document.getElementById('hand-count');
+  const listEl = document.getElementById('hand-list');
+
+  const n = hands.length;
+  countEl.textContent = n;
+  countEl.className = n >= 2 ? 'two' : '';
+
+  listEl.innerHTML = '';
+  hands.forEach((hand, i) => {
+    const conf = hand.score != null ? Math.round(hand.score * 100) : 0;
+    const div = document.createElement('div');
+    div.className = 'hand-item';
+    div.innerHTML = `
+      <div>
+        <div class="hand-name">TANGAN ${i + 1} · ${hand.handedness === 'Left' ? 'KIRI' : 'KANAN'}</div>
+        <div class="conf-bar"><div class="conf-fill" style="width:${conf}%"></div></div>
+      </div>
+      <span class="hand-conf">${conf}%</span>
+    `;
+    listEl.appendChild(div);
+  });
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawCorners(ctx, x, y, w, h, len) {
+  ctx.beginPath();
+  ctx.moveTo(x, y + len); ctx.lineTo(x, y); ctx.lineTo(x + len, y);
+  ctx.moveTo(x + w - len, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + len);
+  ctx.moveTo(x + w, y + h - len); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - len, y + h);
+  ctx.moveTo(x + len, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - len);
+  ctx.stroke();
+}
+</script>
+</body>
+</html>
