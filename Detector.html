@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Hand Detector</title>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.11.0/dist/tf-core.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.11.0/dist/tf-backend-webgl.min.js"></script>
+<title>Hand Detector Fix</title>
+<!-- MENGGUNAKAN FULL TENSORFLOW SCRIPT AGAR TIDAK ADA MODUL YANG HILANG -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/hand-pose-detection@2.0.1/dist/hand-pose-detection.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -98,7 +98,7 @@ body{background:#0a0a0f;font-family:'Inter',sans-serif;min-height:100vh;display:
     <div class="subtitle">Real-time · Multi-hand · AI Powered</div>
     <div class="badges">
       <div class="badge"><div class="srv-dot" id="srv-dot"></div><span id="srv-txt">Server: Offline</span></div>
-      <div class="badge">Versi: 2.1</div>
+      <div class="badge">Versi: 2.2 (Fix)</div>
     </div>
   </div>
 
@@ -132,7 +132,7 @@ body{background:#0a0a0f;font-family:'Inter',sans-serif;min-height:100vh;display:
       </svg>
       <p>Pilih kamera di atas lalu klik<br><strong style="color:#22c55e">Aktifkan Kamera</strong></p>
     </div>
-    <video id="video" playsinline muted></video>
+    <video id="video" playsinline autoplay muted></video>
     <canvas id="canvas"></canvas>
     <div class="cam-footer">
       <div class="cdot" id="cam-dot"></div>
@@ -196,7 +196,6 @@ const ctx    = canvas.getContext('2d');
 // ─── init: enumerate cameras ─────────────────────────────────
 async function initCameras() {
   try {
-    // Coba minta izin kamera di awal secara diam-diam
     await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
       .then(s => s.getTracks().forEach(t => t.stop()))
       .catch(e => console.warn("Izin awal belum diberikan/gagal:", e));
@@ -213,7 +212,6 @@ async function initCameras() {
       activeCamId = cameras[0].deviceId;
       document.getElementById('cam-count').textContent = cameras.length + ' kamera ditemukan';
     } else {
-      // Fallback: Jika list kosong
       sel.innerHTML = '<option value="">Kamera Default (Auto)</option>';
       activeCamId = ''; 
       document.getElementById('cam-count').textContent = 'Menggunakan kamera default';
@@ -295,13 +293,23 @@ async function startCam() {
     canvas.width  = video.videoWidth  || 1280;
     canvas.height = video.videoHeight || 720;
 
+    btxt.textContent = 'Menyiapkan TFJS...';
+    camState('ld', 'Inisialisasi WebGL...');
+
+    // MEMASTIKAN TENSORFLOW SIAP SEBELUM MODEL DI-LOAD
+    await tf.ready();
+    
     btxt.textContent = 'Memuat Model AI...';
-    camState('ld', 'Memuat model MediaPipe...');
+    camState('ld', 'Mengunduh model Lite (harap tunggu)...');
 
     if (!detector) {
       detector = await handPoseDetection.createDetector(
         handPoseDetection.SupportedModels.MediaPipeHands,
-        { runtime: 'tfjs', modelType: 'full', maxHands: 4 }
+        { 
+          runtime: 'tfjs', 
+          modelType: 'lite', // Ganti ke lite agar jauh lebih cepat dan tidak stuck
+          maxHands: 2 // Deteksi maksimal 2 tangan sekaligus agar lebih ringan
+        }
       );
     }
 
@@ -313,16 +321,19 @@ async function startCam() {
     btn.style.color = '#fff';
     srvState('on', 'Server: Online');
     camState('live', 'Live — Deteksi Aktif');
-    addLog('Model siap', '🤖', 'MediaPipe Full · ' + tf.getBackend().toUpperCase());
-    detect();
+    addLog('Model siap', '🤖', 'MediaPipe Lite · ' + tf.getBackend().toUpperCase());
+    
+    // Mulai loop deteksi
+    rafId = requestAnimationFrame(detect);
+    
   } catch (e) {
     loading = false;
     btn.disabled = false;
     btxt.textContent = 'Aktifkan Kamera';
     srvState('', 'Server: Error');
     camState('', 'Error: ' + e.message);
-    addLog('Gagal akses kamera', '❌', 'Periksa izin browser');
-    console.error("Camera Error:", e);
+    addLog('Gagal', '❌', 'Error inisialisasi AI');
+    console.error("Camera/Model Error:", e);
   }
 }
 
@@ -342,6 +353,7 @@ function stopCam() {
   camState('', 'Kamera dihentikan');
   document.getElementById('s-fps').textContent = '—';
   lastN = 0;
+  fc = 0;
 }
 
 // ─── detection loop ───────────────────────────────────────────
@@ -349,7 +361,6 @@ async function detect() {
   if (!running || !detector) return;
 
   if (video.readyState >= 2 && !video.paused) {
-    // sync canvas to actual video size
     if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
       canvas.width  = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -358,9 +369,10 @@ async function detect() {
 
     let hands = [];
     try {
-      // flipHorizontal:false karena canvas sudah di-flip CSS scaleX(-1) sama seperti video
       hands = await detector.estimateHands(video, { flipHorizontal: false });
-    } catch (e) { console.warn('detect err', e); }
+    } catch (e) { 
+      console.warn('Deteksi tertunda', e); 
+    }
 
     hands.forEach(hand => {
       const kps = hand.keypoints;
@@ -449,11 +461,12 @@ async function detect() {
         document.getElementById('s-sess').textContent = sessCount;
         const em = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
         const nm = hands.map((h, i) => `Tangan ${i+1} (${h.handedness === 'Left' ? 'Kiri' : 'Kanan'})`).join(', ');
-        addLog(nm, em, n + ' tangan · ' + fps + ' fps · ' + new Date().toLocaleTimeString('id-ID'));
+        addLog(nm, em, n + ' tangan · ' + fps + ' fps');
       }
     }
     lastN = n;
 
+    // hitung fps
     fc++;
     const t = performance.now();
     if (t - fpsT >= 1000) {
@@ -463,6 +476,7 @@ async function detect() {
     }
   }
 
+  // Lanjutkan loop
   rafId = requestAnimationFrame(detect);
 }
 
