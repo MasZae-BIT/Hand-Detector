@@ -3,10 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Hand Detector Fix</title>
-<!-- MENGGUNAKAN FULL TENSORFLOW SCRIPT AGAR TIDAK ADA MODUL YANG HILANG -->
+<title>Person Detector</title>
+<!-- Menggunakan TensorFlow.js -->
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/hand-pose-detection@2.0.1/dist/hand-pose-detection.min.js"></script>
+<!-- Menggunakan model COCO-SSD -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -17,29 +18,29 @@ body{background:#0a0a0f;font-family:'Inter',sans-serif;min-height:100vh;display:
 /* header */
 .header{text-align:center;margin-bottom:14px}
 .title{font-size:22px;font-weight:800;color:#fff;letter-spacing:-.02em}
-.title span{color:#22c55e}
+.title span{color:#10b981} /* Warna Emerald Green */
 .subtitle{font-size:11px;color:#4b5563;letter-spacing:.1em;margin-top:4px;text-transform:uppercase}
 .badges{display:flex;justify-content:center;gap:8px;margin-top:12px}
 .badge{font-size:11px;padding:3px 10px;border-radius:6px;border:1px solid #2d3748;color:#6b7280;background:#1e2530;display:flex;align-items:center;gap:5px}
 .srv-dot{width:7px;height:7px;border-radius:50%;background:#374151;transition:background .3s}
-.srv-dot.on{background:#22c55e;box-shadow:0 0 5px #22c55e;animation:blink 1.6s infinite}
+.srv-dot.on{background:#10b981;box-shadow:0 0 5px #10b981;animation:blink 1.6s infinite}
 .srv-dot.ld{background:#f59e0b;animation:blink .7s infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 
 /* stats */
 .stats-row{display:flex;justify-content:center;gap:20px;margin:12px 0 16px;font-size:12px;color:#6b7280}
-.stats-row b{color:#fff;font-weight:700}
+.stats-row b{color:#fff;font-weight:700;font-size:14px}
 
 /* camera */
 .cam-wrap{position:relative;width:100%;border-radius:12px;overflow:hidden;background:#0d1117;border:1px solid #2d3748;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;margin-bottom:14px}
-#video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:none}
+#video{width:100%;height:100%;object-fit:cover;display:none;transform:scaleX(-1)} /* Kembalikan mirror agar enak dipakai tes webcam */
 #canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;transform:scaleX(-1)}
 .cam-placeholder{display:flex;flex-direction:column;align-items:center;gap:10px;color:#374151;text-align:center;padding:20px}
 .cam-placeholder svg{width:52px;height:52px}
 .cam-placeholder p{font-size:13px;line-height:1.6}
 .cam-footer{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(13,17,23,.9));padding:8px 12px;display:flex;align-items:center;gap:6px;font-size:11px;color:#6b7280}
 .cdot{width:6px;height:6px;border-radius:50%;background:#374151;flex-shrink:0}
-.cdot.live{background:#22c55e;box-shadow:0 0 5px #22c55e;animation:blink 1.6s infinite}
+.cdot.live{background:#10b981;box-shadow:0 0 5px #10b981;animation:blink 1.6s infinite}
 .cdot.ld{background:#f59e0b;animation:blink .7s infinite}
 
 /* camera selector */
@@ -51,7 +52,7 @@ body{background:#0a0a0f;font-family:'Inter',sans-serif;min-height:100vh;display:
   outline:none;transition:border-color .2s
 }
 .cam-select-wrap select:hover{border-color:#4b5563}
-.cam-select-wrap select:focus{border-color:#22c55e}
+.cam-select-wrap select:focus{border-color:#10b981}
 .cam-select-wrap select option{background:#1a2030;color:#e2e8f0}
 .sel-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#6b7280;pointer-events:none}
 .sel-icon svg{width:16px;height:16px;display:block}
@@ -60,11 +61,7 @@ body{background:#0a0a0f;font-family:'Inter',sans-serif;min-height:100vh;display:
 
 /* buttons */
 .btn-row{display:flex;gap:10px;margin-bottom:18px}
-.btn-icon{width:46px;height:46px;border-radius:10px;border:1px solid #2d3748;background:#1e2530;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:border-color .2s,background .2s,color .2s;color:#6b7280}
-.btn-icon:hover{border-color:#4b5563;background:#252d3a;color:#9ca3af}
-.btn-icon.active{border-color:#22c55e;color:#22c55e}
-.btn-icon svg{width:18px;height:18px}
-.btn-main{flex:1;height:46px;border-radius:10px;background:#22c55e;color:#000;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:filter .15s,transform .1s}
+.btn-main{flex:1;height:46px;border-radius:10px;background:#10b981;color:#000;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:filter .15s,transform .1s}
 .btn-main:hover{filter:brightness(.88)}
 .btn-main:active{transform:scale(.98)}
 .btn-main:disabled{opacity:.5;cursor:not-allowed}
@@ -73,9 +70,9 @@ body{background:#0a0a0f;font-family:'Inter',sans-serif;min-height:100vh;display:
 /* log */
 .log-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .log-title{display:flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.08em;color:#4b5563;text-transform:uppercase;font-weight:600}
-.log-title-dot{width:6px;height:6px;border-radius:50%;background:#22c55e}
-.log-clear{font-size:12px;color:#22c55e;cursor:pointer;background:none;border:none;font-family:'Inter',sans-serif;font-weight:500;padding:2px 6px;border-radius:4px;transition:background .15s}
-.log-clear:hover{background:rgba(34,197,94,.08)}
+.log-title-dot{width:6px;height:6px;border-radius:50%;background:#10b981}
+.log-clear{font-size:12px;color:#10b981;cursor:pointer;background:none;border:none;font-family:'Inter',sans-serif;font-weight:500;padding:2px 6px;border-radius:4px;transition:background .15s}
+.log-clear:hover{background:rgba(16,185,129,.15)}
 .log-list{display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto}
 .log-list::-webkit-scrollbar{width:4px}
 .log-list::-webkit-scrollbar-thumb{background:#2d3748;border-radius:99px}
@@ -85,8 +82,6 @@ body{background:#0a0a0f;font-family:'Inter',sans-serif;min-height:100vh;display:
 .log-info{flex:1;min-width:0}
 .log-name{font-size:12px;font-weight:600;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .log-sub{font-size:11px;color:#4b5563;margin-top:1px}
-.log-ext{color:#4b5563;flex-shrink:0}
-.log-ext svg{width:14px;height:14px;display:block}
 .log-empty{text-align:center;color:#374151;font-size:13px;padding:20px 0}
 </style>
 </head>
@@ -94,21 +89,20 @@ body{background:#0a0a0f;font-family:'Inter',sans-serif;min-height:100vh;display:
 <div class="card">
 
   <div class="header">
-    <div class="title">Hand <span>Detector</span></div>
-    <div class="subtitle">Real-time · Multi-hand · AI Powered</div>
+    <div class="title">Person <span>Detector</span></div>
+    <div class="subtitle">Mendeteksi & Menghitung Manusia Secara Live</div>
     <div class="badges">
       <div class="badge"><div class="srv-dot" id="srv-dot"></div><span id="srv-txt">Server: Offline</span></div>
-      <div class="badge">Versi: 2.2 (Fix)</div>
+      <div class="badge">CCTV Mode</div>
     </div>
   </div>
 
   <div class="stats-row">
-    <span>Terdeteksi: <b id="s-total">0</b></span>
-    <span>Session: <b id="s-sess">0</b></span>
+    <!-- Menambahkan highlight pada jumlah orang -->
+    <span style="font-size: 14px">Jumlah Orang: <b id="s-total" style="color: #10b981;">0</b></span>
     <span>FPS: <b id="s-fps">—</b></span>
   </div>
 
-  <!-- Camera selector -->
   <div class="cam-select-wrap">
     <div class="sel-icon">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -125,12 +119,12 @@ body{background:#0a0a0f;font-family:'Inter',sans-serif;min-height:100vh;display:
   <div class="cam-wrap">
     <div class="cam-placeholder" id="placeholder">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
-        <path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/>
-        <path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2"/>
-        <path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8"/>
-        <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+        <circle cx="9" cy="7" r="4"></circle>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
       </svg>
-      <p>Pilih kamera di atas lalu klik<br><strong style="color:#22c55e">Aktifkan Kamera</strong></p>
+      <p>Arahkan kamera ke orang-orang<br>lalu klik <strong style="color:#10b981">Mulai Deteksi</strong></p>
     </div>
     <video id="video" playsinline autoplay muted></video>
     <canvas id="canvas"></canvas>
@@ -141,27 +135,16 @@ body{background:#0a0a0f;font-family:'Inter',sans-serif;min-height:100vh;display:
   </div>
 
   <div class="btn-row">
-    <button class="btn-icon active" id="btn-kp" title="Keypoints ON/OFF" onclick="toggleKP()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="3"/><circle cx="5" cy="5" r="2"/><circle cx="19" cy="5" r="2"/>
-        <circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/>
-      </svg>
-    </button>
-    <button class="btn-icon active" id="btn-sk" title="Skeleton ON/OFF" onclick="toggleSK()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M3 6h18M3 12h18M3 18h18"/>
-      </svg>
-    </button>
     <button class="btn-main" id="btn-main" onclick="handleMain()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
         <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
       </svg>
-      <span id="btn-txt">Aktifkan Kamera</span>
+      <span id="btn-txt">Mulai Deteksi</span>
     </button>
   </div>
 
   <div class="log-header">
-    <div class="log-title"><div class="log-title-dot"></div>Log Aktivitas</div>
+    <div class="log-title"><div class="log-title-dot"></div>Status Terkini</div>
     <button class="log-clear" onclick="clearLog()">Hapus Log</button>
   </div>
   <div class="log-list" id="log-list">
@@ -170,22 +153,10 @@ body{background:#0a0a0f;font-family:'Inter',sans-serif;min-height:100vh;display:
 
 </div>
 <script>
-// ─── constants ───────────────────────────────────────────────
-const EMOJIS = ['🤚','✋','🖐️','👋','🤙','☝️','✌️','🤞','👌','🤘'];
-const CONN = [
-  [0,1],[1,2],[2,3],[3,4],
-  [0,5],[5,6],[6,7],[7,8],
-  [5,9],[9,10],[10,11],[11,12],
-  [9,13],[13,14],[14,15],[15,16],
-  [13,17],[17,18],[18,19],[19,20],
-  [0,17]
-];
-
 // ─── state ───────────────────────────────────────────────────
 let detector = null, running = false, loading = false;
-let showKP = true, showSK = true;
 let fc = 0, fpsT = performance.now(), fps = 0;
-let lastLogT = 0, lastN = 0, sessCount = 0, maxDet = 0;
+let lastLogT = 0, lastPersonCount = -1; // Set -1 agar deteksi awal (0) tercatat
 let logArr = [], rafId = null;
 let cameras = [], activeCamId = null;
 
@@ -210,6 +181,7 @@ async function initCameras() {
           `<option value="${c.deviceId}">${c.label || 'Kamera ' + (i + 1)}</option>`
         ).join('');
       activeCamId = cameras[0].deviceId;
+      sel.value = activeCamId;
       document.getElementById('cam-count').textContent = cameras.length + ' kamera ditemukan';
     } else {
       sel.innerHTML = '<option value="">Kamera Default (Auto)</option>';
@@ -240,14 +212,6 @@ function camState(s, t) {
   document.getElementById('cam-dot').className = 'cdot' + (s ? ' ' + s : '');
   document.getElementById('cam-txt').textContent = t;
 }
-function toggleKP() {
-  showKP = !showKP;
-  document.getElementById('btn-kp').classList.toggle('active', showKP);
-}
-function toggleSK() {
-  showSK = !showSK;
-  document.getElementById('btn-sk').classList.toggle('active', showSK);
-}
 
 // ─── camera lifecycle ─────────────────────────────────────────
 async function handleMain() {
@@ -269,12 +233,7 @@ async function startCam() {
     if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
 
     let videoConstraints = { width: { ideal: 1280 }, height: { ideal: 720 } };
-    
-    if (activeCamId) {
-      videoConstraints.deviceId = { exact: activeCamId };
-    } else {
-      videoConstraints.facingMode = 'user'; 
-    }
+    if (activeCamId) videoConstraints.deviceId = { exact: activeCamId };
 
     const stream = await navigator.mediaDevices.getUserMedia({
       video: videoConstraints,
@@ -290,50 +249,42 @@ async function startCam() {
 
     document.getElementById('placeholder').style.display = 'none';
     video.style.display = 'block';
-    canvas.width  = video.videoWidth  || 1280;
-    canvas.height = video.videoHeight || 720;
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
 
     btxt.textContent = 'Menyiapkan TFJS...';
-    camState('ld', 'Inisialisasi WebGL...');
+    camState('ld', 'Inisialisasi engine...');
 
-    // MEMASTIKAN TENSORFLOW SIAP SEBELUM MODEL DI-LOAD
     await tf.ready();
     
     btxt.textContent = 'Memuat Model AI...';
-    camState('ld', 'Mengunduh model Lite (harap tunggu)...');
+    camState('ld', 'Mengunduh model COCO-SSD...');
 
     if (!detector) {
-      detector = await handPoseDetection.createDetector(
-        handPoseDetection.SupportedModels.MediaPipeHands,
-        { 
-          runtime: 'tfjs', 
-          modelType: 'lite', // Ganti ke lite agar jauh lebih cepat dan tidak stuck
-          maxHands: 2 // Deteksi maksimal 2 tangan sekaligus agar lebih ringan
-        }
-      );
+      // Gunakan model lite agar frame rate tetap tinggi dan real-time
+      detector = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
     }
 
     running = true;
     loading = false;
     btn.disabled = false;
     btxt.textContent = 'Stop Kamera';
-    btn.style.background = '#dc2626';
+    btn.style.background = '#dc2626'; // Merah saat nyala
     btn.style.color = '#fff';
     srvState('on', 'Server: Online');
-    camState('live', 'Live — Deteksi Aktif');
-    addLog('Model siap', '🤖', 'MediaPipe Lite · ' + tf.getBackend().toUpperCase());
+    camState('live', 'Live — Melacak Manusia');
+    addLog('Sistem Aktif', '👁️', 'Menunggu objek masuk...');
     
-    // Mulai loop deteksi
     rafId = requestAnimationFrame(detect);
     
   } catch (e) {
     loading = false;
     btn.disabled = false;
-    btxt.textContent = 'Aktifkan Kamera';
+    btxt.textContent = 'Mulai Deteksi';
     srvState('', 'Server: Error');
     camState('', 'Error: ' + e.message);
-    addLog('Gagal', '❌', 'Error inisialisasi AI');
-    console.error("Camera/Model Error:", e);
+    addLog('Gagal', '❌', 'Akses kamera ditolak');
+    console.error("Error:", e);
   }
 }
 
@@ -345,14 +296,15 @@ function stopCam() {
   document.getElementById('placeholder').style.display = 'flex';
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const btn = document.getElementById('btn-main');
-  document.getElementById('btn-txt').textContent = 'Aktifkan Kamera';
-  btn.style.background = '#22c55e';
+  document.getElementById('btn-txt').textContent = 'Mulai Deteksi';
+  btn.style.background = '#10b981';
   btn.style.color = '#000';
   btn.disabled = false;
   srvState('', 'Server: Offline');
   camState('', 'Kamera dihentikan');
   document.getElementById('s-fps').textContent = '—';
-  lastN = 0;
+  document.getElementById('s-total').textContent = '0';
+  lastPersonCount = -1;
   fc = 0;
 }
 
@@ -365,108 +317,77 @@ async function detect() {
       canvas.width  = video.videoWidth;
       canvas.height = video.videoHeight;
     }
+    // Bersihkan canvas dari kotak lama setiap frame
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    let hands = [];
+    let predictions = [];
     try {
-      hands = await detector.estimateHands(video, { flipHorizontal: false });
+      predictions = await detector.detect(video);
     } catch (e) { 
-      console.warn('Deteksi tertunda', e); 
+      console.warn('Deteksi error', e); 
     }
 
-    hands.forEach(hand => {
-      const kps = hand.keypoints;
-      if (!kps || kps.length === 0) return;
+    // ─── KUNCI LOGIKA: Saring hanya objek dengan class "person" ───
+    const persons = predictions.filter(p => p.class === 'person' && p.score > 0.45);
 
-      let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
-      kps.forEach(k => {
-        if (k.x < x1) x1 = k.x; if (k.y < y1) y1 = k.y;
-        if (k.x > x2) x2 = k.x; if (k.y > y2) y2 = k.y;
-      });
-      const pad = 22;
-      x1 -= pad; y1 -= pad; x2 += pad; y2 += pad;
-      const bw = x2 - x1, bh = y2 - y1;
-      const isL = hand.handedness === 'Left';
-      const col = isL ? '#22c55e' : '#3b82f6';
-
-      // bounding box
+    persons.forEach(p => {
+      const [x, y, bw, bh] = p.bbox;
+      const col = '#10b981'; // Warna Emerald
+      
+      // Kotak
       ctx.save();
       ctx.strokeStyle = col;
-      ctx.lineWidth = 2;
-      ctx.shadowColor = col;
-      ctx.shadowBlur = 12;
-      rrect(ctx, x1, y1, bw, bh, 10);
-      ctx.stroke();
-      ctx.shadowBlur = 0;
       ctx.lineWidth = 3;
-      corners(ctx, x1, y1, bw, bh, 16);
-
-      // label badge
-      const pct = hand.score != null ? (hand.score * 100).toFixed(0) + '%' : '';
-      const lbl = (isL ? '● KIRI' : '● KANAN') + (pct ? '  ' + pct : '');
-      ctx.font = 'bold 11px Inter,sans-serif';
-      const lw = ctx.measureText(lbl).width + 14;
-      const lh = 20;
-      const lx = x1, ly = y1 - lh - 2;
-      ctx.fillStyle = col;
-      ctx.shadowColor = col; ctx.shadowBlur = 8;
-      try { ctx.beginPath(); ctx.roundRect(lx, ly, lw, lh, 5); ctx.fill(); }
-      catch (_) { ctx.fillRect(lx, ly, lw, lh); }
+      ctx.shadowColor = col;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.rect(x, y, bw, bh);
+      ctx.stroke();
+      
+      // Corner keren
       ctx.shadowBlur = 0;
+      ctx.lineWidth = 4;
+      corners(ctx, x, y, bw, bh, 20);
+
+      // Label
+      const pct = (p.score * 100).toFixed(0) + '%';
+      const labelText = `ORANG ${pct}`;
+      ctx.font = 'bold 12px Inter,sans-serif';
+      const lw = ctx.measureText(labelText).width + 16;
+      const lh = 22;
+      
+      ctx.fillStyle = col;
+      try { ctx.beginPath(); ctx.roundRect(x, y - lh - 4, lw, lh, 4); ctx.fill(); }
+      catch (_) { ctx.fillRect(x, y - lh - 4, lw, lh); }
+      
       ctx.fillStyle = '#000';
-      ctx.fillText(lbl, lx + 7, ly + lh - 6);
+      ctx.fillText(labelText, x + 8, y - 10);
       ctx.restore();
-
-      // skeleton
-      if (showSK) {
-        ctx.save();
-        ctx.strokeStyle = isL ? 'rgba(34,197,94,0.45)' : 'rgba(59,130,246,0.45)';
-        ctx.lineWidth = 1.8;
-        ctx.lineJoin = 'round';
-        CONN.forEach(([a, b]) => {
-          if (!kps[a] || !kps[b]) return;
-          ctx.beginPath();
-          ctx.moveTo(kps[a].x, kps[a].y);
-          ctx.lineTo(kps[b].x, kps[b].y);
-          ctx.stroke();
-        });
-        ctx.restore();
-      }
-
-      // keypoints
-      if (showKP) {
-        kps.forEach(kp => {
-          ctx.beginPath();
-          ctx.arc(kp.x, kp.y, 3.5, 0, Math.PI * 2);
-          ctx.fillStyle = '#fff';
-          ctx.fill();
-          ctx.strokeStyle = col;
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-        });
-      }
     });
 
-    // stats
-    const n = hands.length;
-    if (n > maxDet) {
-      maxDet = n;
-      document.getElementById('s-total').textContent = maxDet;
-    }
-    if (n > 0 && n !== lastN) {
+    // ─── UPDATE ANGKA SECARA REALTIME ───
+    // Panjang array 'persons' mewakili jumlah orang yang terdeteksi di frame INI SAJA.
+    // Jadi kalau orang keluar dari frame, 'persons.length' langsung turun dan otomatis update angka.
+    const currentCount = persons.length;
+    document.getElementById('s-total').textContent = currentCount;
+
+    // Catat ke Log HANYA saat jumlah orang BERUBAH (Misal dari 5 ke 3)
+    if (currentCount !== lastPersonCount) {
       const now = Date.now();
-      if (now - lastLogT > 1500) {
+      // Debounce: Tunggu 1 detik sebelum mencatat log agar tidak spam saat AI berkedip
+      if (now - lastLogT > 1000) {
         lastLogT = now;
-        sessCount++;
-        document.getElementById('s-sess').textContent = sessCount;
-        const em = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
-        const nm = hands.map((h, i) => `Tangan ${i+1} (${h.handedness === 'Left' ? 'Kiri' : 'Kanan'})`).join(', ');
-        addLog(nm, em, n + ' tangan · ' + fps + ' fps');
+        lastPersonCount = currentCount;
+        
+        if (currentCount === 0) {
+          addLog(`Area Kosong`, '👀', `Tidak ada orang di frame`);
+        } else {
+          addLog(`${currentCount} Orang Terlihat`, '🧍', `Angka diperbarui secara real-time`);
+        }
       }
     }
-    lastN = n;
 
-    // hitung fps
+    // Kalkulasi FPS
     fc++;
     const t = performance.now();
     if (t - fpsT >= 1000) {
@@ -476,11 +397,11 @@ async function detect() {
     }
   }
 
-  // Lanjutkan loop
+  // Ulangi loop secara terus-menerus
   rafId = requestAnimationFrame(detect);
 }
 
-// ─── log helpers ──────────────────────────────────────────────
+// ─── helpers ─────────────────────────────────────────────────
 function addLog(name, emoji, sub) {
   const list = document.getElementById('log-list');
   const emp  = document.getElementById('log-empty');
@@ -488,42 +409,26 @@ function addLog(name, emoji, sub) {
   const el = document.createElement('div');
   el.className = 'log-item';
   el.innerHTML = `
-    <div class="log-thumb">${emoji}</div>
+    <div class="log-thumb" style="border-color:#10b981; color:#fff">${emoji}</div>
     <div class="log-info">
       <div class="log-name">${esc(name)}</div>
       <div class="log-sub">${esc(sub)}</div>
-    </div>
-    <div class="log-ext">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-        <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-      </svg>
     </div>`;
   list.insertBefore(el, list.firstChild);
   logArr.push(el);
-  if (logArr.length > 15) logArr.shift().remove();
+  if (logArr.length > 20) logArr.shift().remove();
 }
 
 function clearLog() {
-  document.getElementById('log-list').innerHTML =
-    '<div class="log-empty" id="log-empty">Belum ada deteksi...</div>';
+  document.getElementById('log-list').innerHTML = '<div class="log-empty" id="log-empty">Belum ada deteksi...</div>';
   logArr = [];
-  sessCount = 0;
-  document.getElementById('s-sess').textContent = '0';
+  lastPersonCount = -1; // Reset tracker log
 }
 
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// ─── canvas draw utils ────────────────────────────────────────
-function rrect(c, x, y, w, h, r) {
-  c.beginPath();
-  c.moveTo(x+r,y); c.lineTo(x+w-r,y); c.quadraticCurveTo(x+w,y,x+w,y+r);
-  c.lineTo(x+w,y+h-r); c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
-  c.lineTo(x+r,y+h); c.quadraticCurveTo(x,y+h,x,y+h-r);
-  c.lineTo(x,y+r); c.quadraticCurveTo(x,y,x+r,y); c.closePath();
-}
 function corners(c, x, y, w, h, l) {
   c.beginPath();
   c.moveTo(x,y+l); c.lineTo(x,y); c.lineTo(x+l,y);
@@ -533,7 +438,7 @@ function corners(c, x, y, w, h, l) {
   c.stroke();
 }
 
-// ─── start ───────────────────────────────────────────────────
+// Mulai persiapan
 initCameras();
 </script>
 </body>
