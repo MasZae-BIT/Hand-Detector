@@ -3,38 +3,412 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Person Detector</title>
-<!-- Menggunakan TensorFlow.js -->
+<title>Bogor Command Center - Smart Traffic</title>
+
+<!-- TensorFlow & COCO-SSD -->
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js"></script>
-<!-- Menggunakan model COCO-SSD -->
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+
+<!-- Leaflet (Peta) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- HLS.js (Untuk streaming .m3u8) -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{background:#0a0a0f;font-family:'Inter',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px;color:#e2e8f0}
 
-.card{background:#161b22;border-radius:18px;padding:28px 28px 24px;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+body { background:#0a0a0f; font-family:'Inter',sans-serif; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px 16px; color:#e2e8f0; }
 
-/* header */
-.header{text-align:center;margin-bottom:14px}
-.title{font-size:22px;font-weight:800;color:#fff;letter-spacing:-.02em}
-.title span{color:#10b981} /* Warna Emerald Green */
-.subtitle{font-size:11px;color:#4b5563;letter-spacing:.1em;margin-top:4px;text-transform:uppercase}
-.badges{display:flex;justify-content:center;gap:8px;margin-top:12px}
-.badge{font-size:11px;padding:3px 10px;border-radius:6px;border:1px solid #2d3748;color:#6b7280;background:#1e2530;display:flex;align-items:center;gap:5px}
-.srv-dot{width:7px;height:7px;border-radius:50%;background:#374151;transition:background .3s}
-.srv-dot.on{background:#10b981;box-shadow:0 0 5px #10b981;animation:blink 1.6s infinite}
-.srv-dot.ld{background:#f59e0b;animation:blink .7s infinite}
+.card { background:#161b22; border-radius:18px; padding:28px 28px 24px; width:100%; max-width:500px; max-height:95vh; overflow-y:auto; border:1px solid #2d3748; box-shadow:0 8px 40px rgba(0,0,0,.5); }
+.card::-webkit-scrollbar { width:6px; }
+.card::-webkit-scrollbar-thumb { background:#374151; border-radius:99px; }
+
+.header { text-align:center; margin-bottom:14px; }
+.title { font-size:22px; font-weight:800; color:#fff; letter-spacing:-.02em; }
+.title span { color:#3b82f6; }
+.subtitle { font-size:11px; color:#4b5563; letter-spacing:.1em; margin-top:4px; text-transform:uppercase; }
+.badges { display:flex; justify-content:center; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.badge { font-size:11px; padding:4px 10px; border-radius:6px; border:1px solid #2d3748; color:#9ca3af; background:#1e2530; display:flex; align-items:center; gap:5px; }
+.srv-dot { width:7px; height:7px; border-radius:50%; background:#374151; transition:background .3s; }
+.srv-dot.on { background:#3b82f6; box-shadow:0 0 5px #3b82f6; animation:blink 1.6s infinite; }
+
+.stats-row { display:flex; justify-content:center; gap:15px; margin:12px 0 16px; font-size:12px; color:#6b7280; background:#0d1117; padding:10px; border-radius:10px; border:1px solid #2d3748;}
+.stats-row b { color:#fff; font-weight:700; font-size:13px; }
+
+/* Ubah Select jadi spesifik untuk CCTV */
+.cctv-select-wrap { margin-bottom:12px; position:relative; }
+.cctv-select-wrap select { width:100%; height:42px; border-radius:10px; border:1px solid #2d3748; background:#1a2030; color:#e2e8f0; font-family:'Inter',sans-serif; font-size:13px; padding:0 36px 0 38px; appearance:none; cursor:pointer; outline:none; transition:border-color .2s; }
+.cctv-select-wrap select:focus { border-color:#3b82f6; }
+.sel-icon { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#6b7280; pointer-events:none; }
+.sel-icon svg { width:16px; height:16px; display:block; }
+.sel-arrow { position:absolute; right:12px; top:50%; transform:translateY(-50%); color:#6b7280; pointer-events:none; font-size:10px; }
+
+.cam-wrap { position:relative; width:100%; border-radius:12px; overflow:hidden; background:#000; border:1px solid #2d3748; aspect-ratio:4/3; display:flex; align-items:center; justify-content:center; margin-bottom:14px; }
+#video { width:100%; height:100%; object-fit:cover; display:none; }
+#canvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+.cam-placeholder { display:flex; flex-direction:column; align-items:center; gap:10px; color:#374151; text-align:center; padding:20px; }
+.cam-placeholder svg { width:52px; height:52px; }
+
+.btn-main { width:100%; height:46px; border-radius:10px; background:#3b82f6; color:#fff; font-family:'Inter',sans-serif; font-size:14px; font-weight:700; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:0.2s; margin-bottom:18px; }
+.btn-main:hover { filter:brightness(0.88); }
+.btn-main:disabled { opacity:0.5; cursor:not-allowed; }
+.btn-main svg { width:16px; height:16px; }
+
+.map-header-wrap { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.map-header { font-size:12px; color:#9ca3af; font-weight:600; display:flex; align-items:center; gap:6px; }
+.map-header svg { width:14px; height:14px; color:#3b82f6; }
+.btn-loc { background:#1e2530; border:1px solid #2d3748; color:#e2e8f0; padding:5px 12px; border-radius:6px; font-size:11px; cursor:pointer; font-family:'Inter',sans-serif; font-weight:600; transition:0.2s; display:flex; align-items:center; gap:4px;}
+.btn-loc:hover { background:#10b981; color:#fff; border-color:#10b981; }
+
+#map { width:100%; height:180px; border-radius:12px; margin-bottom:18px; border:1px solid #2d3748; background:#0d1117; z-index:1; }
+.leaflet-layer, .leaflet-control-zoom-in, .leaflet-control-zoom-out, .leaflet-control-attribution { filter:invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
+
+.log-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.log-title { display:flex; align-items:center; gap:6px; font-size:11px; letter-spacing:.08em; color:#4b5563; text-transform:uppercase; font-weight:600; }
+.log-title-dot { width:6px; height:6px; border-radius:50%; background:#3b82f6; }
+.log-clear { font-size:12px; color:#3b82f6; cursor:pointer; background:none; border:none; font-family:'Inter',sans-serif; font-weight:500; padding:2px 6px; border-radius:4px; transition:0.15s; }
+.log-clear:hover { background:rgba(59,130,246,.15); }
+.log-list { display:flex; flex-direction:column; gap:6px; max-height:160px; overflow-y:auto; }
+.log-list::-webkit-scrollbar { width:4px; }
+.log-list::-webkit-scrollbar-thumb { background:#2d3748; border-radius:99px; }
+.log-item { display:flex; align-items:center; gap:10px; padding:9px 10px; background:#1a2030; border-radius:9px; border:1px solid #2d3748; animation:sIn .2s ease; }
+.log-thumb { width:36px; height:36px; border-radius:7px; background:#0d1117; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:18px; border:1px solid #2d3748; }
+.log-info { flex:1; min-width:0; }
+.log-name { font-size:12px; font-weight:600; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.log-sub { font-size:11px; color:#9ca3af; margin-top:1px; }
+.log-empty { text-align:center; color:#374151; font-size:13px; padding:20px 0; }
+
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes sIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div class="card">
 
-/* stats */
-.stats-row{display:flex;justify-content:center;gap:20px;margin:12px 0 16px;font-size:12px;color:#6b7280}
-.stats-row b{color:#fff;font-weight:700;font-size:14px}
+  <div class="header">
+    <div class="title">Command Center <span>Bogor</span></div>
+    <div class="subtitle">Live CCTV & Smart Traffic Detector</div>
+    <div class="badges">
+      <div class="badge"><div class="srv-dot" id="srv-dot"></div><span id="srv-txt">Sistem: Menunggu</span></div>
+      <div class="badge" id="loc-badge">📍 Lokasi: Belum Dipilih</div>
+    </div>
+  </div>
 
-/* camera */
-.cam-wrap{position:relative;width:100%;border-radius:12px;overflow:hidden;background:#0d1117;border:1px solid #2d3748;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;margin-bottom:14px}
-#video{width:100%;height:100%;object-fit:cover;display:none;transform:scaleX(-1)} /* Kembalikan mirror agar enak dipakai tes webcam */
-#canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;transform:scaleX(-1)}
+  <div class="stats-row">
+    <span style="color:#3b82f6">Mobil: <b id="s-car">0</b></span>
+    <span style="color:#22c55e">Motor: <b id="s-motor">0</b></span>
+    <span style="color:#10b981">Orang: <b id="s-person">0</b></span>
+    <span style="color:#f59e0b">FPS: <b id="s-fps">—</b></span>
+  </div>
+
+  <!-- CCTV List Selector -->
+  <div class="cctv-select-wrap">
+    <div class="sel-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+    </div>
+    <select id="cctv-select" onchange="onCctvDropdownChange()">
+      <!-- Akan diisi otomatis oleh JS -->
+    </select>
+    <div class="sel-arrow">▼</div>
+  </div>
+
+  <div class="cam-wrap">
+    <div class="cam-placeholder" id="placeholder">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+      <p>Pilih titik CCTV lalu klik<br><strong style="color:#3b82f6">Mulai Pantau</strong></p>
+    </div>
+    <video id="video" playsinline autoplay muted crossorigin="anonymous"></video>
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <button class="btn-main" id="btn-main" onclick="handleMain()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+    <span id="btn-txt">Mulai Pantau CCTV</span>
+  </button>
+
+  <div class="map-header-wrap">
+    <div class="map-header">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      Peta Sebaran CCTV
+    </div>
+    <button class="btn-loc" id="btn-loc" onclick="findMyLocation()">🎯 Lokasi Saya</button>
+  </div>
+  <div id="map"></div>
+
+  <div class="log-header">
+    <div class="log-title"><div class="log-title-dot"></div>Log Kendaraan</div>
+    <button class="log-clear" onclick="clearLog()">Hapus Log</button>
+  </div>
+  <div class="log-list" id="log-list">
+    <div class="log-empty" id="log-empty">CCTV belum terhubung...</div>
+  </div>
+
+</div>
+
+<script>
+// ─── 1. DATA CCTV PUBLIK BOGOR ──────────────────────────────
+const cctvData = [
+  { 
+    id: "cctv-tugu",
+    name: "Tugu Kujang", 
+    lat: -6.601442, 
+    lng: 106.805077, 
+    url: "https://restreamer2.kotabogor.go.id/memfs/5a5cf878-9d9b-4400-a73a-27a5b24a6ec4.m3u8"
+  },
+  { 
+    id: "cctv-dramaga",
+    name: "Simpang Dramaga", 
+    lat: -6.572201, 
+    lng: 106.749612, 
+    url: "https://restreamer4.kotabogor.go.id/memfs/51e9eed5-4b9a-4d45-bd04-8e3fc7485a67.m3u8"
+  }
+];
+
+// ─── 2. SETUP PETA (LEAFLET) ─────────────────────────────────
+const map = L.map('map', { zoomControl: true }).setView([cctvData[0].lat, cctvData[0].lng], 14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OSMap' }).addTo(map);
+
+const cctvIcon = L.divIcon({
+  html: `<div style="background:#ef4444; width:16px; height:16px; border-radius:50%; border:3px solid #fff; box-shadow:0 0 10px #ef4444; animation:blink 1.5s infinite;"></div>`,
+  className: '', iconSize: [16, 16], iconAnchor: [8, 8]
+});
+
+// Taruh Pin di Peta
+cctvData.forEach(cctv => {
+  const marker = L.marker([cctv.lat, cctv.lng], { icon: cctvIcon, title: cctv.name }).addTo(map);
+  
+  // Jika Pin diklik: Sinkronkan dengan Dropdown & Mulai Video
+  marker.on('click', () => {
+    document.getElementById('cctv-select').value = cctv.id;
+    onCctvDropdownChange();
+    if (!running) handleMain(); // Auto-start kalau belum nyala
+  });
+});
+
+setTimeout(() => { map.invalidateSize(); }, 500);
+
+// GPS Lokasi User
+let myLocMarker = null;
+function findMyLocation() {
+  if (!navigator.geolocation) { alert("Browser kamu tidak mendukung GPS."); return; }
+  const btnLoc = document.getElementById('btn-loc'); btnLoc.innerHTML = '⏳ Mencari...';
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const lat = position.coords.latitude; const lng = position.coords.longitude;
+      btnLoc.innerHTML = '🎯 Lokasi Saya';
+      map.flyTo([lat, lng], 16, { animate: true, duration: 1.5 });
+      const userIcon = L.divIcon({ html: `<div style="background:#10b981; width:16px; height:16px; border-radius:50%; border:3px solid #fff; box-shadow:0 0 10px #10b981; animation:blink 1s infinite;"></div>`, className: '', iconSize: [16, 16], iconAnchor: [8, 8] });
+      if (myLocMarker) map.removeLayer(myLocMarker);
+      myLocMarker = L.marker([lat, lng], { icon: userIcon }).addTo(map);
+      addLog(`Lokasi Kamu Ditemukan`, '🌍', `Menyesuaikan Peta`);
+    },
+    (error) => { btnLoc.innerHTML = '🎯 Lokasi Saya'; addLog(`GPS Gagal`, '❌', 'Izin lokasi tidak diberikan'); }
+  );
+}
+
+// ─── 3. SETUP DROPDOWN LIST ──────────────────────────────────
+function initCctvList() {
+  const sel = document.getElementById('cctv-select');
+  sel.innerHTML = cctvData.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  
+  // Set inisial lokasi di badge
+  document.getElementById('loc-badge').innerHTML = `📍 Lokasi: ${cctvData[0].name}`;
+}
+
+// Fungsi jika Dropdown diubah oleh user
+function onCctvDropdownChange() {
+  const selectedId = document.getElementById('cctv-select').value;
+  const cctv = cctvData.find(c => c.id === selectedId);
+  
+  if (cctv) {
+    // 1. Update Badge Text
+    document.getElementById('loc-badge').innerHTML = `📍 Lokasi: ${cctv.name}`;
+    
+    // 2. Terbangkan peta otomatis ke koordinat tersebut
+    map.flyTo([cctv.lat, cctv.lng], 16, { animate: true, duration: 1.5 });
+    addLog(`Menyorot CCTV ${cctv.name}`, '🗺️', `Peta otomatis digeser`);
+
+    // 3. Jika CCTV sedang nyala, restart dengan link baru
+    if (running) {
+      startExternalVideo(cctv.url);
+    }
+  }
+}
+
+// ─── 4. ENGINE CCTV (HLS & AI) ───────────────────────────────
+const TARGET_CLASSES = ['car', 'motorcycle', 'truck', 'bus', 'person'];
+const EMOJI_MAP = { 'car': '🚗', 'motorcycle': '🏍️', 'truck': '🚚', 'bus': '🚌', 'person': '🧍' };
+const COLOR_MAP = { 'car': '#3b82f6', 'motorcycle': '#22c55e', 'truck': '#f59e0b', 'bus': '#ec4899', 'person': '#10b981' };
+
+let detector = null, running = false, loading = false;
+let fc = 0, fpsT = performance.now(), fps = 0;
+let lastLogT = 0, logArr = [], rafId = null, hlsInstance = null;
+
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+async function handleMain() { 
+  if (loading) return; 
+  if (running) {
+    stopVideo();
+  } else {
+    // Ambil URL dari dropdown yang sedang dipilih
+    const selectedId = document.getElementById('cctv-select').value;
+    const cctv = cctvData.find(c => c.id === selectedId);
+    if(cctv) startExternalVideo(cctv.url);
+  }
+}
+
+async function startAiAndPlay() {
+  if (!detector) {
+    await tf.ready();
+    detector = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+  }
+  await video.play();
+  running = true; loading = false;
+  document.getElementById('btn-main').style.background = '#ef4444';
+  document.getElementById('btn-txt').textContent = 'Hentikan CCTV';
+  document.getElementById('srv-dot').classList.add('on');
+  document.getElementById('srv-txt').textContent = 'Sistem: Online';
+  addLog('Koneksi Berhasil', '📡', 'Mulai memindai lalu lintas...');
+  detect();
+}
+
+async function startExternalVideo(url) {
+  loading = true;
+  stopVideoInternal(); // Bersihkan sisa video lama
+
+  const btnTxt = document.getElementById('btn-txt');
+  btnTxt.textContent = 'Menghubungkan Stream...';
+  document.getElementById('placeholder').style.display = 'none';
+  video.style.display = 'block';
+  
+  try {
+    if (Hls.isSupported()) {
+      hlsInstance = new Hls();
+      hlsInstance.loadSource(url);
+      hlsInstance.attachMedia(video);
+      
+      hlsInstance.on(Hls.Events.MANIFEST_PARSED, async function() {
+        btnTxt.textContent = 'Memuat Model AI...';
+        try { await startAiAndPlay(); } catch(e) { handleVidError(e); }
+      });
+      hlsInstance.on(Hls.Events.ERROR, function (event, data) {
+        if (data.fatal) { handleVidError(data); }
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Safari support
+      video.src = url;
+      video.addEventListener('loadedmetadata', async () => {
+        btnTxt.textContent = 'Memuat Model AI...';
+        try { await startAiAndPlay(); } catch (e) { handleVidError(e); }
+      }, {once: true});
+    }
+  } catch (e) {
+    handleVidError(e);
+  }
+}
+
+function handleVidError(e) {
+  loading = false;
+  stopVideoInternal();
+  addLog('Gagal Memutar CCTV', '⚠️', 'Server CCTV sibuk / Error CORS');
+  console.log("Stream Error:", e);
+}
+
+function stopVideoInternal() {
+  if (rafId) cancelAnimationFrame(rafId);
+  if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+  video.srcObject = null; video.src = ""; video.removeAttribute('src');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+
+function stopVideo() {
+  running = false;
+  stopVideoInternal();
+  video.style.display = 'none'; document.getElementById('placeholder').style.display = 'flex';
+  
+  document.getElementById('btn-main').style.background = '#3b82f6';
+  document.getElementById('btn-txt').textContent = 'Mulai Pantau CCTV';
+  document.getElementById('srv-dot').className = 'srv-dot'; document.getElementById('srv-txt').textContent = 'Sistem: Offline';
+  
+  document.getElementById('s-car').textContent = '0'; document.getElementById('s-motor').textContent = '0'; document.getElementById('s-person').textContent = '0'; document.getElementById('s-fps').textContent = '—';
+}
+
+// ─── 5. DETEKSI & PENCATATAN ──────────────────────────────────
+async function detect() {
+  if (!running || !detector) return;
+  if (video.readyState >= 2 && !video.paused) {
+    if (canvas.width !== video.clientWidth) { canvas.width = video.clientWidth; canvas.height = video.clientHeight; }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    let predictions = [];
+    try { predictions = await detector.detect(video); } catch (e) {}
+    
+    let counts = { car: 0, motor: 0, person: 0 };
+    let objectsToLog = {};
+
+    predictions.forEach(p => {
+      if (TARGET_CLASSES.includes(p.class) && p.score > 0.45) {
+        if (p.class === 'car' || p.class === 'truck' || p.class === 'bus') counts.car++;
+        else if (p.class === 'motorcycle') counts.motor++;
+        else if (p.class === 'person') counts.person++;
+        objectsToLog[p.class] = (objectsToLog[p.class] || 0) + 1;
+
+        const [x, y, w, h] = p.bbox;
+        const scaleX = canvas.width / video.videoWidth; const scaleY = canvas.height / video.videoHeight;
+        const sX = x*scaleX, sY = y*scaleY, sW = w*scaleX, sH = h*scaleY;
+        const col = COLOR_MAP[p.class] || '#fff';
+
+        ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.strokeRect(sX, sY, sW, sH);
+        const txt = p.class.toUpperCase() + ' ' + (p.score*100).toFixed(0) + '%';
+        ctx.fillStyle = col; ctx.fillRect(sX, sY - 22, ctx.measureText(txt).width + 12, 22);
+        ctx.fillStyle = '#000'; ctx.font = 'bold 11px Inter'; ctx.fillText(txt, sX + 6, sY - 6);
+      }
+    });
+
+    document.getElementById('s-car').textContent = counts.car;
+    document.getElementById('s-motor').textContent = counts.motor;
+    document.getElementById('s-person').textContent = counts.person;
+
+    if (Object.keys(objectsToLog).length > 0) {
+      const now = Date.now();
+      if (now - lastLogT > 3000) { // Catat log tiap 3 detik agar tidak spam
+        lastLogT = now;
+        for (const [cls, qty] of Object.entries(objectsToLog)) {
+          const nameIndo = cls === 'car' ? 'Mobil' : cls === 'motorcycle' ? 'Motor' : cls === 'person' ? 'Orang' : 'Truk/Bus';
+          addLog(`${qty}x ${nameIndo}`, EMOJI_MAP[cls] || '🎯', `Melewati layar CCTV`);
+        }
+      }
+    }
+
+    fc++; const t = performance.now();
+    if (t - fpsT >= 1000) { fps = Math.round(fc * 1000 / (t - fpsT)); fc = 0; fpsT = t; document.getElementById('s-fps').textContent = fps; }
+  }
+  rafId = requestAnimationFrame(detect);
+}
+
+// ─── 6. LOG HELPERS ───────────────────────────────────────────
+function addLog(name, emoji, sub) {
+  const list = document.getElementById('log-list');
+  const emp = document.getElementById('log-empty'); if (emp) emp.remove();
+  const el = document.createElement('div'); el.className = 'log-item';
+  el.innerHTML = `<div class="log-thumb">${emoji}</div><div class="log-info"><div class="log-name">${esc(name)}</div><div class="log-sub">${esc(sub)}</div></div>`;
+  list.insertBefore(el, list.firstChild);
+  logArr.push(el); if (logArr.length > 15) logArr.shift().remove();
+}
+function clearLog() { document.getElementById('log-list').innerHTML = '<div class="log-empty" id="log-empty">Log telah dibersihkan...</div>'; logArr = []; }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Mulai Inisialisasi
+initCctvList();
+</script>
+</body>
+</html>#canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;transform:scaleX(-1)}
 .cam-placeholder{display:flex;flex-direction:column;align-items:center;gap:10px;color:#374151;text-align:center;padding:20px}
 .cam-placeholder svg{width:52px;height:52px}
 .cam-placeholder p{font-size:13px;line-height:1.6}
